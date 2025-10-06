@@ -1,39 +1,27 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("cloudinary").v2;
 const Internship = require('../models/internship');
 
+require('dotenv').config();
 const router = express.Router();
 
-// Multer storage for resumes
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Replace @ and . with _ for folder name
-    const emailSafe = req.body.email ? req.body.email.replace(/[@.]/g, '_') : 'anonymous';
-    const folder = path.join(__dirname, '..', 'uploads', emailSafe);
-
-    // Create folder if it doesn't exist
-    if (!fs.existsSync(folder)) {
-      fs.mkdirSync(folder, { recursive: true });
-    }
-
-    cb(null, folder);
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = Date.now() + '-' + file.originalname;
-    cb(null, uniqueName);
+// --- Multer + Cloudinary Storage for resumes ---
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "sustainhire_resumes",
+    resource_type: "auto",
+    format: async (req, file) => file.originalname.split('.').pop()
   }
 });
-
 const upload = multer({ storage });
 
 // POST /api/internship/apply
 router.post('/apply', upload.single('resume'), async (req, res) => {
   try {
     const data = req.body;
-
-    // Convert checkbox value to boolean
     const declaration = data.declaration === 'true' || data.declaration === 'on';
 
     const internship = new Internship({
@@ -53,7 +41,7 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
       locationPref: data.locationPref,
       skills: data.skills || "",
       experience: data.experience || "",
-      resume: req.file ? req.file.path : "",
+      resume: req.file ? req.file.path : "", // Cloudinary URL
       whyInternship: data.whyInternship || "",
       careerGoals: data.careerGoals || "",
       areasOfInterest: data.areasOfInterest || "",
