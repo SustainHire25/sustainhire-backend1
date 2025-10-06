@@ -3,6 +3,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const multer = require("multer");
 const path = require("path");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("cloudinary").v2;
 
 require('dotenv').config();
 
@@ -13,9 +15,14 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected successfully"))
   .catch(err => console.error("MongoDB connection error:", err));
 
-// --- Middleware ---
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// --- Cloudinary Configuration ---
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
+// --- Middleware ---
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "OPTIONS"],
@@ -28,25 +35,23 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/internship", require("./routes/internship"));
 
-// --- Multer Storage Setup ---
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
+// --- Multer + Cloudinary Storage for direct uploads ---
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "sustainhire_resumes",
+    resource_type: "auto",  // automatically detect file type
+    format: async (req, file) => file.originalname.split('.').pop() // keep original extension
+  }
 });
-
 const upload = multer({ storage });
 
-// --- Upload Route ---
+// --- Upload Route (optional direct upload endpoint) ---
 app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
   }
-  const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-  res.status(200).json({ message: "File uploaded successfully", fileUrl });
+  res.status(200).json({ message: "File uploaded successfully", fileUrl: req.file.path });
 });
 
 // --- Start Server ---
